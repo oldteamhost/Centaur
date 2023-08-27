@@ -20,20 +20,17 @@
 
 #include "file.h"
 #include "getopt.h"
-#include "md5.h"
 #include "other.h"
 #include "icmp4.h"
 #include "socks5.h"
 
 #define VERSION "0.2"
-#define OK_SEND 0
-#define NO_SEND 1
 
 struct centaur_data_md5
 {
     std::vector<std::string> temp_file;
     std::string combined_values; /* 192.168.1.1;192.168.1.2 */
-    std::string hash_md5_string; /* combined_values in encode md5 */
+    std::string key; /* combined_values in encode md5 */
     std::unordered_map<std::string, std::vector<std::string>> md5_hash_map;
 };
 
@@ -49,7 +46,8 @@ const struct option longopts[] =
     {"tcp-timeout", required_argument, 0, 4},
     {"ping-port", required_argument, 0, 5},
     {"ttl", required_argument, 0, 6},
-    {"non-stop", no_argument, 0, 7}
+    {"non-stop", no_argument, 0, 7},
+    {"myself", required_argument, 0, 8}
 };
 
 void usage(const char* run);
@@ -65,7 +63,5 @@ void parse_file(centaur_data_md5 *cd5, std::string& filename);
 std::vector<std::string> split_string_string(const std::string& str, char delimiter);
 void encode_md5_data(centaur_data_md5 *cd5);
 void print_md5_hash(const uint8_t* md5hash);
-
-int __send(const std::string& key, std::vector<char> bytes);
 
 #endif

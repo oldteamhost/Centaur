@@ -9,12 +9,14 @@
 #include "include/icmp4.h"
 #include "include/nescathread.h"
 #include "include/connect.h"
+#include "include/send.h"
 #include "include/status.h"
 #include "include/other.h"
 #include "include/pinger.h"
 #include "include/socks5.h"
 #include <cstdio>
 #include <cstdlib>
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 #include <algorithm>
@@ -25,6 +27,7 @@ struct options_centaur
     int ping_threads;
 
     std::vector<char> message;
+    std::string myself;
     std::unordered_map<std::string, double> rtts;
     int send_port;
 };
@@ -33,6 +36,7 @@ centaur_data_md5 cd5;
 options_centaur oc;
 pinger_options po;
 socks_5_connection connection;
+std::mutex lol;
 
 const char* shortopts = "hvm:p:l:";
 
@@ -40,7 +44,9 @@ void thread_pinger(const char* host, int type, struct pinger_options *po)
 {
     double temp = pinger(host, type, po);
     /*printf("(%s) ping is: %f\n",host, temp);*/
+    lol.lock();
     oc.rtts[host] = temp;
+    lol.unlock();
 }
 
 int main(int argc, char** argv)
@@ -55,6 +61,7 @@ int main(int argc, char** argv)
     oc.ping_threads = 200;
     oc.non_stop = false;
     oc.send_port = 80;
+    oc.myself = "anonymous";
     std::string temp_message = "Hello Internet!";
     oc.message = std_string_to_vector(temp_message);
 
@@ -96,8 +103,12 @@ int main(int argc, char** argv)
             case 7:
                 oc.non_stop = true;
                 break;
+            case 8:
+                oc.myself = optarg;
+                break;
         }
     }
+
     std::vector<std::string> files;
     time_t now = time(NULL);
     struct tm *t = localtime(&now); char datetime[20];
@@ -116,24 +127,20 @@ int main(int argc, char** argv)
     }
     encode_md5_data(&cd5);
     double ping = icmp_ping(get_ip_by_dns("google.com"), po.icmp_timeout, 8, 0, 1, po.icmp_ttl);
-    printf("> local: ip=%s, ping=%0.2fms, files=%lu, hosts=%lu\n", get_local_ip(), ping, files.size(), cd5.temp_file.size());
 
-    connection.proxy_host = "127.0.0.1";
-    connection.proxy_port = 9050;
-    connection.socket = -1;
-    printf("> tor: host=%s, port=%d, socket=%d\n", connection.proxy_host, connection.proxy_port, connection.socket);
+    printf("> local: ip=%s, ping=%0.2fms, files=%lu, hosts=%lu\n", get_local_ip(), ping, files.size(), cd5.temp_file.size());
     printf("> icmp: type=8, code=0, ttl=%d, timeout=%d, delay=%d\n\n", po.icmp_ttl, po.icmp_timeout, po.delay_ping);
 
     struct timespec start_time;
     clock_gettime(CLOCK_MONOTONIC, &start_time);
-    printf("* Ping scan at %lu hosts, threads=%d, time=%s\n", cd5.md5_hash_map[cd5.hash_md5_string].size(), oc.ping_threads, get_time());
+    printf("* Ping scan at %lu hosts, threads=%d, time=%s\n", cd5.md5_hash_map[cd5.key].size(), oc.ping_threads, get_time());
 
     int i = 0;
     std::vector<std::future<void>> futures_ping;
     thread_pool ping_pool(100);
-    for (int i = 0; i < cd5.md5_hash_map[cd5.hash_md5_string].size(); i++)
+    for (int i = 0; i < cd5.md5_hash_map[cd5.key].size(); i++)
     {
-        const char* host = cd5.md5_hash_map[cd5.hash_md5_string][i].c_str();
+        const char* host = cd5.md5_hash_map[cd5.key][i].c_str();
         futures_ping.emplace_back(ping_pool.enqueue(thread_pinger, host, this_is(host), &po));
         if (futures_ping.size() >= 100){
             for (auto& future : futures_ping){future.get();}
@@ -151,7 +158,7 @@ int main(int argc, char** argv)
 
     double min_rtt = std::numeric_limits<double>::max();
     std::string ip_fast;
-    for (const std::string& ip : cd5.md5_hash_map[cd5.hash_md5_string]) {
+    for (const std::string& ip : cd5.md5_hash_map[cd5.key]) {
         if (oc.rtts.find(ip) != oc.rtts.end() && oc.rtts[ip] != -1)
         {
             if (oc.rtts[ip] < min_rtt)
@@ -161,7 +168,7 @@ int main(int argc, char** argv)
             }
         }
     }
-    std::vector<std::string> ips = cd5.md5_hash_map[cd5.hash_md5_string];
+    std::vector<std::string> ips = cd5.md5_hash_map[cd5.key];
     std::unordered_map<std::string, double> rtts_this = oc.rtts;
     std::sort(ips.begin(), ips.end(), [&rtts_this](const std::string& ip1, const std::string& ip2) {
         double rtt1 = rtts_this[ip1];
@@ -171,83 +178,37 @@ int main(int argc, char** argv)
         return rtt1 < rtt2;
     });
     oc.rtts = rtts_this;
-    cd5.md5_hash_map[cd5.hash_md5_string] = ips;
+    cd5.md5_hash_map[cd5.key] = ips;
     rtts_this.clear();
     ips.clear();
 
     printf("* Finished ping scan at %.2fs, fasted=%s, rtt=%0.2fms\n\n", elapsed_time, ip_fast.c_str(), min_rtt);
-
     printf("* Sending loop start... \n");
-    __send(cd5.hash_md5_string, oc.message);
+
+    send_options message;
+
+    message.bytes = oc.message;
+    message.id_map = cd5.md5_hash_map;
+    message.non_stop = oc.non_stop;
+    message.send_port = oc.send_port;
+    message.myself = oc.myself;
+
+    __send(cd5.key, &message);
 }
 
-int __send(const std::string& key, std::vector<char> bytes)
+#include <openssl/md5.h>
+std::string md5(const std::string& input)
 {
-    std::vector<std::string> total_hosts = cd5.md5_hash_map[key];
-    for (int i = 0; i < total_hosts.size(); i++)
+    unsigned char digest[MD5_DIGEST_LENGTH];
+    MD5((const unsigned char*)input.c_str(), input.length(), digest);
+
+    std::stringstream ss;
+    for (int i = 0; i < MD5_DIGEST_LENGTH; i++)
     {
-        struct timespec start_time;
-        clock_gettime(CLOCK_MONOTONIC, &start_time);
-
-        int is = this_is(total_hosts[i].c_str());
-        if (is == TOR_URL || is == URL || is == I2P_URL) {total_hosts[i] = clear_url(total_hosts[i].c_str());}
-
-        if (is == TOR_DNS || is == TOR_URL)
-        {
-            connection.target_host = total_hosts[i].c_str();
-            connection.target_port = oc.send_port;
-
-            if (socks5_connect(&connection))
-            {
-                bytes.push_back('\0');
-                if (socks5_send(&connection, bytes.data(), strlen(bytes.data())))
-                {
-                    socks5_close(&connection);
-                    struct timespec end_time;
-                    clock_gettime(CLOCK_MONOTONIC, &end_time);
-                    double elapsed_time = (end_time.tv_sec - start_time.tv_sec) +
-                         (end_time.tv_nsec - start_time.tv_nsec) / 1e9;
-
-                    printf("[TOR] Data sent successfully at %.2fs in: %s\n",elapsed_time, total_hosts[i].c_str());
-                    socks5_close(&connection);
-                    if (!oc.non_stop)
-                    {
-                        return OK_SEND;
-                    }
-                }
-                socks5_close(&connection);
-            }
-        }
-
-        if (is == DNS || is == URL || is == IP4)
-        {
-            int send = -1;
-            if (is == DNS || is == URL)
-            {
-                const char* temp_ip = get_ip_by_dns(total_hosts[i].c_str());
-                send = send_tcp_connect_packet(temp_ip, 80, bytes.data());
-            }
-            else
-            {
-                send = send_tcp_connect_packet(total_hosts[i].c_str(), 80, bytes.data());
-            }
-
-            if (send == 0)
-            {
-                struct timespec end_time;
-                clock_gettime(CLOCK_MONOTONIC, &end_time);
-                double elapsed_time = (end_time.tv_sec - start_time.tv_sec) +
-                    (end_time.tv_nsec - start_time.tv_nsec) / 1e9;
-
-                printf("[TCP] Data sent successfully at %.2fs in: %s\n",elapsed_time, total_hosts[i].c_str());
-                if (!oc.non_stop)
-                {
-                    return OK_SEND;
-                }
-            }
-        }
+        ss << std::hex << std::setw(2) << std::setfill('0') << (int)digest[i];
     }
-    return NO_SEND;
+
+    return ss.str();
 }
 
 void encode_md5_data(centaur_data_md5 *cd5)
@@ -259,15 +220,8 @@ void encode_md5_data(centaur_data_md5 *cd5)
     uint8_t _md5[16];
     char temp_buffer[cd5->combined_values.size() + 1];
     strcpy(temp_buffer, cd5->combined_values.c_str());
-    md5String(temp_buffer, _md5);
-
-    std::stringstream hash_stream;
-    for (int i = 0; i < 16; ++i)
-    {
-        hash_stream << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(_md5[i]);
-    }
-    cd5->hash_md5_string = hash_stream.str();
-    cd5->md5_hash_map[cd5->hash_md5_string] = temp_vector;
+    cd5->key = md5(temp_buffer);
+    cd5->md5_hash_map[cd5->key] = temp_vector;
 }
 
 /* old (not use) */
@@ -311,6 +265,7 @@ void usage(const char* run)
 
     puts("\narguments verbose:");
     puts("  -m, -message <text>   Set message for send.");
+    puts("  -myself <self>        Edit source host.");
     puts("  -p, -port <port>      Set port for send.");
     puts("  -non-stop             Not stop after success sent.");
 
