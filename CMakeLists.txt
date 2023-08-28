@@ -16,6 +16,10 @@ set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES
 file(GLOB SRCS *.cc)
 file(GLOB C_SRCS *.c)
 
-add_executable(centaur ${SRCS} ${C_SRCS})
+file(GLOB SRCS_ADD_0 base/*.cc)
+file(GLOB SRCS_ADD_1 base/*.c)
+file(GLOB SRCS_ADD_2 network/*.c)
+
+add_executable(centaur ${SRCS} ${C_SRCS} ${SRCS_ADD_0} ${SRCS_ADD_1} ${SRCS_ADD_2})
 target_link_libraries(centaur pthread ssl crypto)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")

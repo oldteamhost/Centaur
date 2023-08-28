@@ -26,10 +26,10 @@ extern "C" {
 int
 search_constchar(const char *sentence, const char *word);
 
-#define EXAMPLE_URL "http://"
+#define EXAMPLE_URL  "http://"
 #define _EXAMPLE_URL "https://"
-#define EXAMPLE_TOR ".onion"
-#define EXAMPLE_I2P ".i2p"
+#define EXAMPLE_TOR  ".onion"
+#define EXAMPLE_I2P  ".i2p"
 
 int
 this_is(const char* node);

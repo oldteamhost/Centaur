@@ -21,11 +21,11 @@ extern "C" {
 
 typedef struct
 {
-    const char *proxy_host;
-    int proxy_port;
-    const char *target_host;
-    int target_port;
-    int socket;
+  const char *proxy_host;
+  int proxy_port;
+  const char *target_host;
+  int target_port;
+  int socket;
 } socks_5_connection;
 
 bool socks5_connect(socks_5_connection *connection);

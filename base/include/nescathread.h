@@ -17,10 +17,10 @@
 
 class thread_pool{
 public:
-    explicit thread_pool(size_t numThreads);
+  explicit thread_pool(size_t numThreads);
 
 	template <class F, class... Args>
-    auto enqueue(F&& f, Args&&... args) -> std::future<typename std::result_of<F(Args...)>::type> {
+  auto enqueue(F&& f, Args&&... args) -> std::future<typename std::result_of<F(Args...)>::type> {
         using return_type = typename std::result_of<F(Args...)>::type;
 
         auto task = std::make_shared<std::packaged_task<return_type()>>(std::bind(std::forward<F>(f), std::forward<Args>(args)...)); 
@@ -37,13 +37,13 @@ public:
     ~thread_pool();
 
 private:
-    std::vector<std::thread> workers;
-    std::queue<std::function<void()>> tasks;
+  std::vector<std::thread> workers;
+  std::queue<std::function<void()>> tasks;
 
-    std::mutex queueMutex;
-    std::condition_variable condition;
+  std::mutex queueMutex;
+  std::condition_variable condition;
 
-    bool stop;
+  bool stop;
 };
 
 #endif

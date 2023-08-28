@@ -10,27 +10,28 @@
 #include <iostream>
 #include <vector>
 #include <unordered_map>
-#include "icmp4.h"
-#include "nescathread.h"
-#include "connect.h"
+#include "../network/include/icmp4.h"
+#include "../base/include/nescathread.h"
+#include "../network/include/ip4.h"
+#include "../network/include/socks5.h"
+#include "../network/include/connect.h"
 #include "status.h"
 #include "other.h"
 #include "pinger.h"
-#include "socks5.h"
 
-#define OK_SEND 0
-#define NO_SEND 1
+#define SUCCESS_SEND_MESSAGE 0
+#define FAILED_SEND_MESSAGE 1
 #define VERBOSE
 
 struct send_options
 {
-    std::unordered_map<std::string, std::vector<std::string>> id_map;
+  std::unordered_map<std::string, std::vector<std::string>> id_map;
 
-    int send_port;
-    bool non_stop;
+  int send_port;
+  bool non_stop;
 
-    std::string myself;
-    std::vector<char> bytes;
+  std::string myself;
+  std::vector<char> bytes;
 };
 
 int
