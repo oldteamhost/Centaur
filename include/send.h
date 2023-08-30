@@ -34,7 +34,6 @@ struct send_options
   std::vector<char> bytes;
 };
 
-int
-__send(const std::string& key, struct send_options *so);
+int __send(const std::string& key, struct send_options *so);
 
 #endif

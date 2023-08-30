@@ -16,6 +16,7 @@
 #include <vector>
 #include <iomanip>
 
+#include "include/receive.h"
 #include "network/include/icmp4.h"
 #include "network/include/connect.h"
 #include "network/include/socks5.h"
@@ -52,6 +53,7 @@ struct options_centaur
   int ping_threads;
   pinger_options po;
   send_options so;
+  struct receive_options ro;
 };
 
 struct centaur_data_md5
@@ -63,7 +65,7 @@ struct centaur_data_md5
 };
 
 #define VERSION "0.4"
-// #define __VERBOSE
+//#define __VERBOSE
 
 std::vector<std::string> split_string_string(const std::string& str, char delimiter);
 std::vector<char> const_char_ptr_to_vector(const char* data);
@@ -215,8 +217,13 @@ int main(int argc, char** argv)
   printf("* Sending loop start... \n");
 
   oc.so.id_map = cd5.md5_hash_map;
-
   __send(cd5.key, &oc.so);
+
+  printf("\n* Receive server start... \n");
+  oc.ro.timeout_ms = 100;
+  oc.ro.source_port = 33010;
+  oc.ro.bytes = oc.so.bytes;
+  __receive(cd5.key, &oc.ro);
 }
 
 #include <openssl/md5.h>
